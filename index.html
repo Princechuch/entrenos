@@ -76,6 +76,7 @@ section>*{min-width:0}
 .paso.abierto{grid-template-columns:1fr}
 .paso.abierto .foto{width:100%;height:auto;aspect-ratio:850/567;cursor:zoom-out}
 .ampliar{font-size:13px}
+.pasos .sep{font-weight:600;margin-top:8px;padding-top:10px;border-top:1px solid var(--agua)}
 .paso .t{font-size:16px;color:var(--pesada);display:block}
 .paso.tuyo .txt::after{content:" 印";color:var(--sello);font-weight:700}
 /* Las dos fotos de cada ejercicio, en gris y alternándose: se ve el movimiento. */
@@ -313,11 +314,12 @@ function pintarHoy() {
   if (hoyS.length) h += '<div class="label">Hoy en Strava</div>' + hoyS.map(stravaLinea).join('');
   h += '<button class="boton" data-ir="apuntar">Apuntar' + (s ? ' el entreno' : '') + '</button></div>';
   if (s && SES[s].calentar) h += bloque(PLAN.calentar[SES[s].calentar], PLAN.fuentes.calentar, 'Antes');
-  if (s && SES[s].estirar) h += bloque(PLAN.estirar[SES[s].estirar], PLAN.fuentes.estirar + ' 印 ' + PLAN.fuentes.tuyo, 'Después');
   if (PLAN.diario) {
+    var enf = s && SES[s].estirar && PLAN.enfasis ? PLAN.enfasis[SES[s].estirar] : null;
+    var rutina = {nombre: PLAN.diario.nombre, min: PLAN.diario.min, pasos: PLAN.diario.pasos.concat(enf ? [{sep: enf.nombre}].concat(enf.pasos) : [])};
     var est = !!(D.sesiones[hoy] && D.sesiones[hoy].est), sem7 = diasEstirados(lunesDe(hoy));
     var pie = '<button class="boton' + (est ? ' claro' : '') + '" data-estirado aria-pressed="' + est + '">' + (est ? '✓ Estirado hoy' : 'Hecho, he estirado') + '</button><p class="nota">Esta semana, ' + sem7 + ' de 5 días.</p>';
-    h += bloque(PLAN.diario, PLAN.fuentes.diario + ' 印 ' + PLAN.fuentes.tuyo, 'Cada día', pie);
+    h += bloque(rutina, PLAN.fuentes.diario + ' 印 ' + PLAN.fuentes.tuyo, 'Cada día', pie);
   }
   $('p-hoy').innerHTML = h;
 }
@@ -341,7 +343,7 @@ function hechoHoy(f, s) {
 }
 function bloque(b, fuente, cuando, pie) {
   var h = '<div><div class="label">' + cuando + '</div><h2>' + esc(b.nombre) + '</h2>' + (b.min ? '<p class="nota">' + b.min + '</p>' : '') + '</div><div class="card"><ol class="pasos">';
-  b.pasos.forEach(function (p) { h += '<li class="paso' + (p.img ? '' : ' sinimg') + (p.tuyo ? ' tuyo' : '') + '">' + foto(p.img) + '<div><span class="txt">' + esc(p.n) + '</span>' + (p.t ? '<span class="t">' + esc(p.t) + '</span>' : '') + '</div></li>'; });
+  b.pasos.forEach(function (p) { if (p.sep) { h += '<li class="sep">' + esc(p.sep) + '</li>'; return; } h += '<li class="paso' + (p.img ? '' : ' sinimg') + (p.tuyo ? ' tuyo' : '') + '">' + foto(p.img) + '<div><span class="txt">' + esc(p.n) + '</span>' + (p.t ? '<span class="t">' + esc(p.t) + '</span>' : '') + '</div></li>'; });
   return h + '</ol>' + (b.pasos.some(function (p) { return p.img; }) ? '<p class="nota ampliar">Toca una foto para verla grande.</p>' : '') + (pie || '') + '<details><summary>Por qué así</summary><p>' + esc(fuente) + '</p></details></div>';
 }
 
@@ -427,7 +429,7 @@ function pintarProg() {
   var km = runs.filter(function (x) { return x.f >= lun; }).reduce(function (a, x) { return a + (x.km || 0); }, 0);
   var racha = 0, l = semana.length >= 3 ? lun : mover(lun, -7);
   while (hechas.filter(function (f) { return f >= l && f < mover(l, 7); }).length >= 3) { racha++; l = mover(l, -7); }
-  h += '<div class="kpis"><div class="kpi"><b>' + semana.length + ' de 4</b><span>días entrenados esta semana</span></div><div class="kpi"><b>' + coma(Math.round(km * 10) / 10) + '</b><span>km esta semana</span></div><div class="kpi"><b>' + racha + '</b><span>semanas seguidas con 3 o más</span></div><div class="kpi"><b>' + diasEstirados(lun) + ' de 5</b><span>días estirados esta semana</span></div></div>';
+  h += '<div class="kpis"><div class="kpi"><b>' + semana.length + '</b><span>días entrenados esta semana</span></div><div class="kpi"><b>' + coma(Math.round(km * 10) / 10) + '</b><span>km esta semana</span></div><div class="kpi"><b>' + racha + '</b><span>semanas seguidas con 3 o más</span></div><div class="kpi"><b>' + diasEstirados(lun) + ' de 5</b><span>días estirados esta semana</span></div></div>';
   var ns = Object.keys(D.oura).sort().filter(function (f) { return D.oura[f].dormido != null; }).slice(-14);
   if (ns.length) {
     var W = 320, H = 110, bw = W / 14, mx = 600, y8 = H - 480 / mx * H;
