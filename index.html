@@ -70,6 +70,12 @@ section>*{min-width:0}
 .pasos{margin:0;padding:0;list-style:none;display:grid;gap:10px}
 .paso{display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:center}
 .paso.sinimg{grid-template-columns:1fr}
+.toca{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 8px}
+.enlace{font:inherit;font-size:15px;background:none;border:0;padding:6px 0;color:var(--sello);text-decoration:underline;cursor:pointer}
+.paso .foto{cursor:zoom-in}
+.paso.abierto{grid-template-columns:1fr}
+.paso.abierto .foto{width:100%;height:auto;aspect-ratio:850/567;cursor:zoom-out}
+.ampliar{font-size:13px}
 .paso .t{font-size:16px;color:var(--pesada);display:block}
 .paso.tuyo .txt::after{content:" 印";color:var(--sello);font-weight:700}
 /* Las dos fotos de cada ejercicio, en gris y alternándose: se ve el movimiento. */
@@ -115,7 +121,7 @@ select{font:inherit;font-size:17px;width:100%;max-width:100%;padding:8px 10px;bo
 .campo input{font-family:var(--cifra);font-size:24px;font-weight:700;padding:8px 10px;border:1px solid var(--agua);border-radius:10px;background:var(--papel);color:var(--tinta);width:100%}
 textarea{font:inherit;font-size:17px;width:100%;min-height:70px;padding:10px;border:1px solid var(--agua);border-radius:10px;background:var(--hoja);color:var(--tinta);resize:vertical}
 /* Progreso */
-.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 8px}
 .kpi{border-top:1px solid var(--tinta);padding-top:6px;min-width:0}
 .kpi b{display:block;font-size:32px;font-weight:500;font-variant-numeric:lining-nums tabular-nums}
 .kpi span{display:block;font-size:15px;line-height:1.25;color:var(--pesada)}
@@ -244,6 +250,8 @@ function guardarLuego() {
 window.addEventListener('pagehide', function () { if (pend) { clearTimeout(pend); if (!LOCAL) navigator.sendBeacon(API, new Blob([JSON.stringify({k: K, accion: 'guardar', fecha: FECHA, sesion: D.sesiones[FECHA] || null})], {type: 'text/plain'})); } });
 
 /* ---------- lógica ---------- */
+var CAMBIAR = false;
+function diasEstirados(lun) { return Object.keys(D.sesiones).filter(function (f) { return f >= lun && f < mover(lun, 7) && D.sesiones[f].est; }).length; }
 function sesionDe(f) { var r = D.sesiones[f]; if (r) return r.s; var p = PLAN.dias[fecha(f).getDay()] || ''; return !p && carrerasDe(f).length ? 'libre' : p; }
 function registro() {
   if (!D.sesiones[FECHA]) D.sesiones[FECHA] = {s: sesionDe(FECHA), ej: {}};
@@ -306,6 +314,11 @@ function pintarHoy() {
   h += '<button class="boton" data-ir="apuntar">Apuntar' + (s ? ' el entreno' : '') + '</button></div>';
   if (s && SES[s].calentar) h += bloque(PLAN.calentar[SES[s].calentar], PLAN.fuentes.calentar, 'Antes');
   if (s && SES[s].estirar) h += bloque(PLAN.estirar[SES[s].estirar], PLAN.fuentes.estirar + ' 印 ' + PLAN.fuentes.tuyo, 'Después');
+  if (PLAN.diario) {
+    var est = !!(D.sesiones[hoy] && D.sesiones[hoy].est), sem7 = diasEstirados(lunesDe(hoy));
+    var pie = '<button class="boton' + (est ? ' claro' : '') + '" data-estirado aria-pressed="' + est + '">' + (est ? '✓ Estirado hoy' : 'Hecho, he estirado') + '</button><p class="nota">Esta semana, ' + sem7 + ' de 5 días.</p>';
+    h += bloque(PLAN.diario, PLAN.fuentes.diario + ' 印 ' + PLAN.fuentes.tuyo, 'Cada día', pie);
+  }
   $('p-hoy').innerHTML = h;
 }
 /* El plan se cumple siempre; el semáforo solo dice cómo de fuerte. */
@@ -326,10 +339,10 @@ function hechoHoy(f, s) {
   if (S.ej && runs.length) return 'Has corrido ' + coma(runs[0].km) + ' km (Strava). Las barras siguen pendientes.';
   return '';
 }
-function bloque(b, fuente, cuando) {
+function bloque(b, fuente, cuando, pie) {
   var h = '<div><div class="label">' + cuando + '</div><h2>' + esc(b.nombre) + '</h2>' + (b.min ? '<p class="nota">' + b.min + '</p>' : '') + '</div><div class="card"><ol class="pasos">';
   b.pasos.forEach(function (p) { h += '<li class="paso' + (p.img ? '' : ' sinimg') + (p.tuyo ? ' tuyo' : '') + '">' + foto(p.img) + '<div><span class="txt">' + esc(p.n) + '</span>' + (p.t ? '<span class="t">' + esc(p.t) + '</span>' : '') + '</div></li>'; });
-  return h + '</ol><details><summary>Por qué así</summary><p>' + esc(fuente) + '</p></details></div>';
+  return h + '</ol>' + (b.pasos.some(function (p) { return p.img; }) ? '<p class="nota ampliar">Toca una foto para verla grande.</p>' : '') + (pie || '') + '<details><summary>Por qué así</summary><p>' + esc(fuente) + '</p></details></div>';
 }
 
 /* ---------- Apuntar ---------- */
@@ -337,12 +350,16 @@ function pintarApuntar() {
   var reg = D.sesiones[FECHA], s = sesionDe(FECHA), h = '';
   h += '<div class="dia"><button class="redondo" data-dia="-1" aria-label="Día anterior">‹</button><b>' + larga(FECHA) + '</b><button class="redondo" data-dia="1" aria-label="Día siguiente">›</button></div>';
   if (FECHA !== iso(new Date())) h += '<button class="hoy" data-hoy>Volver a hoy</button>';
-  h += '<div class="chips" role="group" aria-label="Sesión">';
-  ['A', 'B', 'carrera', 'rnr', 'libre'].forEach(function (k) { h += '<button class="chip" data-ses="' + k + '" aria-pressed="' + (s === k) + '">' + esc(SES[k].nombre) + '</button>'; });
-  h += '<button class="chip" data-ses="" aria-pressed="' + (!s) + '">Descanso</button></div>';
+  var plan = PLAN.dias[fecha(FECHA).getDay()] || '';
+  h += '<div class="toca"><span>' + (s === plan ? 'Toca' : 'Apuntado') + ': <b>' + (s ? esc(SES[s].nombre) : 'descanso') + '</b>' + (s !== plan ? ' <span class="meta">(el plan decía ' + (plan ? esc(SES[plan].nombre).toLowerCase() : 'descanso') + ')</span>' : '') + '</span><button class="enlace" data-cambiar aria-expanded="' + CAMBIAR + '">' + (CAMBIAR ? 'Listo' : 'He hecho otra cosa') + '</button></div>';
+  if (CAMBIAR) {
+    h += '<div class="chips" role="group" aria-label="Qué has hecho">';
+    ['A', 'B', 'carrera', 'rnr', 'libre'].forEach(function (k) { h += '<button class="chip" data-ses="' + k + '" aria-pressed="' + (s === k) + '">' + esc(SES[k].nombre) + '</button>'; });
+    h += '<button class="chip" data-ses="" aria-pressed="' + (!s) + '">Descanso</button></div>';
+  }
   var stDia = D.strava[FECHA] || [];
   if (stDia.length && !(SES[s] && SES[s].carrera)) h += '<div class="card"><p class="hecho">✓ Hecho, desde Strava</p>' + stDia.map(stravaLinea).join('') + '</div>';
-  if (!s) { if (!stDia.length) h += '<p class="vacio">Día de descanso. Si has hecho algo, elige arriba qué.</p>'; $('p-apuntar').innerHTML = h; return; }
+  if (!s) { if (!stDia.length) h += '<p class="vacio">Día de descanso. Si has hecho algo, pulsa «He hecho otra cosa».</p>'; $('p-apuntar').innerHTML = h; return; }
   var S = SES[s];
   if (S.carrera) {
     var r = reg || {}, st = D.strava[FECHA] || [];
@@ -410,7 +427,7 @@ function pintarProg() {
   var km = runs.filter(function (x) { return x.f >= lun; }).reduce(function (a, x) { return a + (x.km || 0); }, 0);
   var racha = 0, l = semana.length >= 3 ? lun : mover(lun, -7);
   while (hechas.filter(function (f) { return f >= l && f < mover(l, 7); }).length >= 3) { racha++; l = mover(l, -7); }
-  h += '<div class="kpis"><div class="kpi"><b>' + semana.length + ' de 4</b><span>días entrenados esta semana</span></div><div class="kpi"><b>' + coma(Math.round(km * 10) / 10) + '</b><span>km esta semana</span></div><div class="kpi"><b>' + racha + '</b><span>semanas seguidas con 3 o más</span></div></div>';
+  h += '<div class="kpis"><div class="kpi"><b>' + semana.length + ' de 4</b><span>días entrenados esta semana</span></div><div class="kpi"><b>' + coma(Math.round(km * 10) / 10) + '</b><span>km esta semana</span></div><div class="kpi"><b>' + racha + '</b><span>semanas seguidas con 3 o más</span></div><div class="kpi"><b>' + diasEstirados(lun) + ' de 5</b><span>días estirados esta semana</span></div></div>';
   var ns = Object.keys(D.oura).sort().filter(function (f) { return D.oura[f].dormido != null; }).slice(-14);
   if (ns.length) {
     var W = 320, H = 110, bw = W / 14, mx = 600, y8 = H - 480 / mx * H;
@@ -474,15 +491,25 @@ $('p-hoy').addEventListener('click', function (ev) {
   var b = ev.target.closest('button'); if (!b) return;
   if (b.dataset.ir) { FECHA = iso(new Date()); ir(b.dataset.ir); }
   if (b.hasAttribute('data-refrescar')) refrescar();
+  if (b.hasAttribute('data-estirado')) {
+    var hoy = iso(new Date());
+    if (!D.sesiones[hoy]) D.sesiones[hoy] = {s: sesionDe(hoy), ej: {}};
+    var r = D.sesiones[hoy]; r.est = !r.est;
+    pintarHoy();
+    if (!LOCAL) api('guardar', {fecha: hoy, sesion: r}, function () { aviso(r.est ? 'Apuntado' : 'Quitado'); }, function (e) { aviso('No se ha guardado: ' + e.message); });
+  }
 });
+$('p-hoy').addEventListener('click', function (ev) { var f = ev.target.closest('.paso .foto'); if (f) f.parentNode.classList.toggle('abierto'); });
+$('p-apuntar').addEventListener('click', function (ev) { var f = ev.target.closest('.ejcab .foto'); if (f) f.closest('[data-ej]').querySelector('details').open ^= 1; });
 $('p-apuntar').addEventListener('click', function (ev) {
   var b = ev.target.closest('button'); if (!b) return;
-  if (b.dataset.dia) { FECHA = mover(FECHA, +b.dataset.dia); pintarApuntar(); return; }
+  if (b.dataset.dia) { FECHA = mover(FECHA, +b.dataset.dia); CAMBIAR = false; pintarApuntar(); return; }
+  if (b.hasAttribute('data-cambiar')) { CAMBIAR = !CAMBIAR; pintarApuntar(); return; }
   if (b.hasAttribute('data-hoy')) { FECHA = iso(new Date()); pintarApuntar(); return; }
   if (b.dataset.ses !== undefined) {
     var r = registro(); r.s = b.dataset.ses;
     if (!r.s && !Object.keys(r.ej || {}).length && !r.km && !r.nota) delete D.sesiones[FECHA];
-    guardarLuego(); pintarApuntar(); return;
+    CAMBIAR = false; guardarLuego(); pintarApuntar(); return;
   }
   if (b.dataset.sens) { var r2 = registro(); r2.sens = r2.sens === b.dataset.sens ? null : b.dataset.sens; guardarLuego(); pintarApuntar(); return; }
   if (b.hasAttribute('data-mas')) {
