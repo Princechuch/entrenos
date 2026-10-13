@@ -280,7 +280,9 @@ function pintarMarcas() {
   return h + '</tbody></table><button class="boton claro" data-medir>' + (tocaMedir() ? 'Toca medir: medir hoy' : 'Medir otra vez') + '</button>';
 }
 function diasEstirados(lun) { return Object.keys(D.sesiones).filter(function (f) { return f >= lun && f < mover(lun, 7) && D.sesiones[f].est; }).length; }
-function sesionDe(f) { var r = D.sesiones[f]; if (r) return r.s; var p = PLAN.dias[fecha(f).getDay()] || ''; return !p && carrerasDe(f).length ? 'libre' : p; }
+/* Lo que dice el plan ese día. Un día con lista alterna por semanas, contando desde el lunes 12/10/2026. */
+function planDe(f) { var p = PLAN.dias[fecha(f).getDay()] || ''; if (Array.isArray(p)) p = p[((Math.round((fecha(f) - fecha("2026-10-12")) / 6048e5) % p.length) + p.length) % p.length]; return p; }
+function sesionDe(f) { var r = D.sesiones[f]; if (r) return r.s; var p = planDe(f); return !p && carrerasDe(f).length ? 'libre' : p; }
 function registro() {
   if (!D.sesiones[FECHA]) D.sesiones[FECHA] = {s: sesionDe(FECHA), ej: {}};
   return D.sesiones[FECHA];
@@ -381,11 +383,11 @@ function pintarApuntar() {
   var reg = D.sesiones[FECHA], s = sesionDe(FECHA), h = '';
   h += '<div class="dia"><button class="redondo" data-dia="-1" aria-label="Día anterior">‹</button><b>' + larga(FECHA) + '</b><button class="redondo" data-dia="1" aria-label="Día siguiente">›</button></div>';
   if (FECHA !== iso(new Date())) h += '<button class="hoy" data-hoy>Volver a hoy</button>';
-  var plan = PLAN.dias[fecha(FECHA).getDay()] || '';
+  var plan = planDe(FECHA);
   h += '<div class="toca"><span>' + (s === plan ? 'Toca' : 'Apuntado') + ': <b>' + (s ? esc(SES[s].nombre) : 'descanso') + '</b>' + (s !== plan ? ' <span class="meta">(el plan decía ' + (plan ? esc(SES[plan].nombre).toLowerCase() : 'descanso') + ')</span>' : '') + '</span><button class="enlace" data-cambiar aria-expanded="' + CAMBIAR + '">' + (CAMBIAR ? 'Listo' : 'He hecho otra cosa') + '</button></div>';
   if (CAMBIAR) {
     h += '<div class="chips" role="group" aria-label="Qué has hecho">';
-    ['A', 'B', 'carrera', 'rnr', 'libre'].forEach(function (k) { h += '<button class="chip" data-ses="' + k + '" aria-pressed="' + (s === k) + '">' + esc(SES[k].nombre) + '</button>'; });
+    Object.keys(SES).forEach(function (k) { h += '<button class="chip" data-ses="' + k + '" aria-pressed="' + (s === k) + '">' + esc(SES[k].nombre) + '</button>'; });
     h += '<button class="chip" data-ses="" aria-pressed="' + (!s) + '">Descanso</button></div>';
   }
   var stDia = D.strava[FECHA] || [];
@@ -405,7 +407,8 @@ function pintarApuntar() {
     h += '<div class="label">Cómo ha ido</div><div class="chips">';
     ['Fácil', 'Bien', 'Duro'].forEach(function (k) { h += '<button class="chip" data-sens="' + k + '" aria-pressed="' + (r.sens === k) + '">' + k + '</button>'; });
     h += '</div></div>';
-  } else {
+  }
+  if (S.ej) {
     S.ej.forEach(function (id) {
       var x = EJ[id], e = (reg && reg.ej && reg.ej[id]) || null, prev = anterior(id, FECHA);
       var v = e ? e.v : prev ? prev.v : x.base;
