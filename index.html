@@ -115,6 +115,8 @@ select{font:inherit;font-size:17px;width:100%;max-width:100%;padding:8px 10px;bo
 .serie input::-webkit-outer-spin-button,.serie input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .mas{font:inherit;font-size:24px;width:44px;height:44px;margin-top:16px;border-radius:50%;border:1px dashed var(--agua);background:none;color:var(--pesada);cursor:pointer}
 .subir{font-size:16px;color:var(--sello)}
+.saltado+.saltado{margin-top:14px;padding-top:14px;border-top:1px solid var(--agua)}
+.saltado p{margin:0 0 8px}
 .hecho{font-size:18px;color:var(--verde);font-weight:500}
 .subir::before{content:"印 ";font-weight:700}
 .campos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -299,6 +301,26 @@ function tocaSubir(id, e) {
   var x = EJ[id], r = reps(e.r);
   return r.length >= x.series && r.every(function (n) { return n >= x.max; }) && e.v < x.variantes.length - 1;
 }
+/* Lo que el plan pedía ese día está hecho: series apuntadas, o la carrera si era de correr. */
+function cumplido(f) {
+  var r = D.sesiones[f] || {}, S = SES[sesionDe(f)] || {};
+  var series = Object.keys(r.ej || {}).some(function (id) { return reps(r.ej[id].r).length; });
+  return series || (S.carrera && (carrerasDe(f).length || r.km || r.sens));
+}
+/* Días de esta semana, hasta ayer, en los que tocaba algo y no consta ni está decidido qué hacer con ello. */
+function saltados(hoy) {
+  var t = [];
+  for (var f = lunesDe(hoy); f < hoy; f = mover(f, 1)) {
+    var r = D.sesiones[f] || {};
+    if (sesionDe(f) && !cumplido(f) && !r.perdido && !r.rec) t.push(f);
+  }
+  return t;
+}
+/* Ejercicios en los que la última vez llegó al tope en todas las series: hoy suben de variante. */
+function subidas(ids, f) {
+  return ids.filter(function (id) { var p = anterior(id, f), e = ((D.sesiones[f] || {}).ej || {})[id]; return !e && p && tocaSubir(id, p); });
+}
+function guardarDia(f) { if (!LOCAL) api('guardar', {fecha: f, sesion: D.sesiones[f]}, function () { aviso('Guardado'); }, function (e) { aviso('No se ha guardado: ' + e.message); }); }
 function carrerasDe(f) { return (D.strava[f] || []).filter(function (a) { return CORRER.test(a.tipo); }); }
 function stravaLinea(a) { return '<div class="strava"><span>' + esc(a.nombre) + '</span><span class="n">' + (a.km ? coma(a.km) + ' km · ' : '') + dur(a.min) + (a.km ? ' · ' + ritmo(a.km, a.min) + '/km' : '') + (a.fc ? ' · ' + a.fc + ' ppm' : '') + '</span></div>'; }
 
@@ -328,12 +350,27 @@ function pintarHoy() {
     if (R.ideal) sem.push('Según el Oura, tu hora para acostarte está entre las ' + esc(R.ideal) + '.');
     if (sem.length) h += '<p class="nota">' + sem.join(' ') + '</p>';
   }
+  var sal = saltados(hoy);
+  if (sal.length) {
+    h += '<div><h2>Sin hacer esta semana</h2></div><div class="card">';
+    sal.forEach(function (f) {
+      var n = esc(SES[sesionDe(f)].nombre);
+      h += '<div class="saltado"><p><b>' + (f === mover(hoy, -1) ? 'Ayer' : larga(f)) + '</b> tocaba ' + n + ' y no consta.</p><div class="chips">';
+      if (!cumplido(hoy)) h += '<button class="chip" data-recuperar="' + f + '">Lo hago hoy' + (s && s !== sesionDe(f) ? ', en vez de ' + esc(SES[s].nombre) : '') + '</button>';
+      h += '<button class="chip" data-perdido="' + f + '">Lo doy por perdido</button></div></div>';
+    });
+    h += '</div>';
+  }
   h += '<div><h2>Hoy toca</h2></div><div class="card">';
   if (!s) h += '<h3>Descanso</h3><p class="nota">Si te apetece, un paseo. Si haces algo, apúntalo.</p>';
   else {
     var S = SES[s];
     h += '<h3>' + esc(S.nombre) + '</h3>';
-    if (S.ej) h += '<p class="nota">' + S.ej.map(function (id) { return esc(EJ[id].nombre); }).join(' · ') + '</p>';
+    if (S.ej) {
+      h += '<p class="nota">' + S.ej.map(function (id) { return esc(EJ[id].nombre); }).join(' · ') + '</p>';
+      var sub = subidas(S.ej, hoy);
+      if (sub.length) h += '<p class="subir">Hoy subes de variante, porque la última vez llegaste al tope en todas las series:</p><ul class="senales">' + sub.map(function (id) { var x = EJ[id], p = anterior(id, hoy); return '<li>' + esc(x.nombre) + ': ' + esc(x.variantes[p.v + 1]).toLowerCase() + ' <span class="meta">(antes, ' + esc(x.variantes[p.v]).toLowerCase() + ', ' + reps(p.r).join('·') + ')</span></li>'; }).join('') + '</ul>';
+    }
     else if (S.nota) h += '<p class="nota">' + esc(S.nota) + '</p>';
     var hecho = hechoHoy(hoy, s);
     if (hecho) h += '<p class="hecho">✓ ' + hecho + '</p>';
@@ -411,7 +448,7 @@ function pintarApuntar() {
   if (S.ej) {
     S.ej.forEach(function (id) {
       var x = EJ[id], e = (reg && reg.ej && reg.ej[id]) || null, prev = anterior(id, FECHA);
-      var v = e ? e.v : prev ? prev.v : x.base;
+      var sube = !e && prev && tocaSubir(id, prev), v = e ? e.v : prev ? prev.v + (sube ? 1 : 0) : x.base;
       var r = e ? e.r : [], ns = Math.max(x.series, r.length);
       h += '<div class="card" data-ej="' + id + '"><div class="ejcab">' + (x.img ? foto(x.img) : '<div class="foto"></div>') + '<div><h3>' + esc(x.nombre) + '</h3><span class="meta">' + x.series + ' × ' + x.min + '-' + x.max + (x.nota ? ', ' + esc(x.nota).toLowerCase().replace('.', '') : '') + '</span></div></div>';
       if (x.como) h += '<details><summary>Cómo se hace</summary>' + (x.img ? foto(x.img, true) : '') + '<p>' + esc(x.como) + '</p></details>';
@@ -425,7 +462,7 @@ function pintarApuntar() {
       }
       h += '<button class="mas" data-mas aria-label="Otra serie">+</button></div>';
       if (e && tocaSubir(id, e)) h += '<p class="subir">Tope en todas las series: la próxima, ' + esc(x.variantes[e.v + 1]).toLowerCase() + '.</p>';
-      else if (!e && prev && prev.v === v && tocaSubir(id, prev)) h += '<p class="subir">La última vez llegaste al tope: prueba ' + esc(x.variantes[v + 1]).toLowerCase() + '.</p>';
+      else if (sube) h += '<p class="subir">Subida de variante: la última vez llegaste al tope en todas las series. Si no sale, vuelve a la anterior arriba.</p>';
       h += '</div>';
     });
   }
@@ -526,6 +563,17 @@ $('p-hoy').addEventListener('click', function (ev) {
   var b = ev.target.closest('button'); if (!b) return;
   if (b.dataset.ir) { FECHA = iso(new Date()); ir(b.dataset.ir); }
   if (b.hasAttribute('data-refrescar')) refrescar();
+  if (b.dataset.recuperar || b.dataset.perdido) {
+    var hoy0 = iso(new Date()), f0 = b.dataset.recuperar || b.dataset.perdido;
+    if (!D.sesiones[f0]) D.sesiones[f0] = {s: sesionDe(f0), ej: {}};
+    if (b.dataset.recuperar) {
+      D.sesiones[f0].rec = hoy0;
+      if (!D.sesiones[hoy0]) D.sesiones[hoy0] = {s: '', ej: {}};
+      D.sesiones[hoy0].s = D.sesiones[f0].s;
+      guardarDia(hoy0);
+    } else D.sesiones[f0].perdido = true;
+    guardarDia(f0); pintarHoy(); return;
+  }
   if (b.hasAttribute('data-medir')) { MEDIR = true; ir('prog'); return; }
   if (b.hasAttribute('data-estirado')) {
     var hoy = iso(new Date());
