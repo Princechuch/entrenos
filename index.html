@@ -281,7 +281,7 @@ function pintarMarcas() {
 }
 function diasEstirados(lun) { return Object.keys(D.sesiones).filter(function (f) { return f >= lun && f < mover(lun, 7) && D.sesiones[f].est; }).length; }
 /* Lo que dice el plan ese día. Un día con lista alterna por semanas, contando desde el lunes 12/10/2026. */
-function planDe(f) { var p = PLAN.dias[fecha(f).getDay()] || ''; if (Array.isArray(p)) p = p[((Math.round((fecha(f) - fecha("2026-10-12")) / 6048e5) % p.length) + p.length) % p.length]; return p; }
+function planDe(f) { var p = PLAN.dias[fecha(f).getDay()] || ''; if (Array.isArray(p)) p = p[((Math.floor(Math.round((fecha(f) - fecha("2026-10-12")) / 864e5) / 7) % p.length) + p.length) % p.length]; return p; }
 function sesionDe(f) { var r = D.sesiones[f]; if (r) return r.s; var p = planDe(f); return !p && carrerasDe(f).length ? 'libre' : p; }
 function registro() {
   if (!D.sesiones[FECHA]) D.sesiones[FECHA] = {s: sesionDe(FECHA), ej: {}};
