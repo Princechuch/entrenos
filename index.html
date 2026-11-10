@@ -318,7 +318,8 @@ function tocaSubir(id, e) {
 function cumplido(f) {
   var r = D.sesiones[f] || {}, S = SES[sesionDe(f)] || {};
   var series = Object.keys(r.ej || {}).some(function (id) { return reps(r.ej[id].r).length; });
-  return series || (S.carrera && (carrerasDe(f).length || r.km || r.sens));
+  /* Una nota cuenta: si hizo otra cosa (Cindy en vez de Barras A), lo apunta así (10/11/2026). */
+  return series || !!(r.nota && r.nota.trim()) || (S.carrera && (carrerasDe(f).length || r.km || r.sens));
 }
 /* Días de esta semana, hasta ayer, en los que tocaba algo y no consta ni está decidido qué hacer con ello. */
 function saltados(hoy) {
@@ -417,6 +418,7 @@ function hechoHoy(f, s) {
   var r = D.sesiones[f], runs = carrerasDe(f), S = SES[s] || {};
   var series = r && r.ej ? Object.keys(r.ej).filter(function (id) { return reps(r.ej[id].r).length; }).length : 0;
   if (S.ej && series) return 'Hecho: ' + series + ' de ' + S.ej.length + ' ejercicios apuntados.' + (runs.length ? ' Y has corrido ' + coma(runs[0].km) + ' km.' : '');
+  if (r && r.nota && r.nota.trim() && !series && !(S.carrera && runs.length)) return 'Hecho: lo has apuntado en la nota.';
   if (S.carrera && runs.length) return 'Hecho: ' + coma(runs[0].km) + ' km en ' + dur(runs[0].min) + ', desde Strava.';
   if (S.carrera && r && r.km) return 'Hecho: ' + coma(r.km) + ' km.';
   if (S.ej && runs.length) return 'Has corrido ' + coma(runs[0].km) + ' km (Strava). Las barras siguen pendientes.';
